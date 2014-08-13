@@ -1,0 +1,185 @@
+---
+title: "Reproducible Research Assignment 1"
+author: "Dwight Kruger"
+date: "Monday, August 11, 2014"
+output: html_document
+---
+
+The data for this assignment was downloaded from the course web site:
+
+Dataset: Activity monitoring data [52K]. The variables included in this dataset are:
+
+* steps: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+
+*date: The date on which the measurement was taken in YYYY-MM-DD format
+
+* interval: Identifier for the 5-minute interval in which measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+
+  
+Q1: What is mean total number of steps taken per day?
+
+For this part of the assignment, you can ignore the missing values in the dataset.
+
+* Make a histogram of the total number of steps taken each day
+
+* Calculate and report the mean and median total number of steps taken per day
+
+```{r "load data"}
+    # Unzip the data file stored in the project.
+    sourceFile.zip <- "./activity.zip"    
+    unzip(sourceFile.zip, overwrite = TRUE, exdir = ".")
+    
+    # Read the datafile into a data frame, with the column types as numeric, date, numeric
+    setClass('myDate') 
+    setAs("character","myDate", function(from) as.Date(from, format="%Y-%m-%d") )    
+    colClasses = c("numeric", "myDate", "numeric")
+    activity = read.csv("./activity.csv", stringsAsFactors = FALSE, colClasses = colClasses)
+
+```
+
+```{r results='asis', fig.height=5, fig.width=5}
+    library(data.table)
+    table = data.table(activity)
+    table = table[complete.cases(table), ]
+    activityStepsByDate = table[,sum(steps), by=date]
+    setnames(activityStepsByDate, c("date", "V1"), c("Date", "TotalSteps"))
+
+    meanStepsPerDay = mean(activityStepsByDate$TotalSteps, na.rm = TRUE)
+    medianStepsPerDay = median(activityStepsByDate$TotalSteps, na.rm = TRUE)
+    
+    hist(activityStepsByDate$TotalSteps, 
+         xlab="Total number of steps taken each day",
+         main="Histogram of the total number\nof steps taken each day")
+
+    print.noquote(paste("Mean steps per day = ", meanStepsPerDay, sep=""))
+    print.noquote(paste("Median steps per day = ", medianStepsPerDay, sep=""))
+```
+
+Q2: What is the average daily activity pattern?
+
+    Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and 
+    the average number of steps taken, averaged across all days (y-axis). 
+    
+```{r}
+    activityByTime <- table[, median(steps), by=interval]
+    setnames(activityByTime, c("interval", "V1"), c("Interval", "AvgSteps"))
+    plot(x = activityByTime$Interval, 
+         y=activityByTime$AvgSteps, 
+         type = "l",
+         xlab="Time",
+         ylab="Average Steps",
+         main="Average Number of Steps Taken\nAveraged Across all Days")
+```
+
+    Which 5-minute interval, on average across all the days in the dataset, contains the 
+    maximum number of steps?
+
+```{r}
+    maxInterval <- activityByTime$Interval[which.max(activityByTime$AvgSteps)]
+
+    print.noquote(paste("The 5-minute interval with the max number of steps is interval ", maxInterval, sep=""))
+
+```
+
+Q3: Calculate and report the total number of missing values in the dataset (i.e. 
+the total number of rows with NAs)
+
+```{r "Total number of missing values"}
+    missingValues= is.na(activity$steps)
+    totalNumberMissingValues <- sum(missingValues)
+
+    print.noquote(paste("Total numer of missing values = ", totalNumberMissingValues, sep=""))
+
+```
+
+Devise a strategy for filling in all of the missing values in the dataset. The strategy
+implemneted here is to fill in the missing values with the mean for that 5-minute interval
+
+Create a new dataset that is equal to the original dataset but with the missing 
+data filled in
+
+```{r "Missing values strategy"}
+    
+    # Replace the missing values with the mean for that 5-minute interval
+    activityPlusMissingData <- activity
+    for (i in 1:dim(activityPlusMissingData)[1])
+    {
+        if (missingValues[i])
+        {
+            activityPlusMissingData$steps[i] = activityByTime[Interval==activityPlusMissingData[i,]$interval, ]$AvgSteps
+        }
+    }
+    
+    table2 = data.table(activityPlusMissingData)
+    table2 = table2[complete.cases(table2), ]
+    activityStepsByDateWithMissingData = table2[,sum(steps), by=date]
+    setnames(activityStepsByDateWithMissingData, c("date", "V1"), c("Date", "TotalSteps"))
+```
+
+Make a histogram of the total number of steps taken each day and Calculate and report 
+the mean and median total number of steps taken per day. Do these values differ from 
+the estimates from the first part of the assignment? What is the impact of imputing 
+missing data on the estimates of the total daily number of steps?
+
+```{r results='asis', "Analysis with missing data filled in"}
+    hist(activityStepsByDateWithMissingData$TotalSteps, 
+         xlab="Total number of steps taken each day",
+         main="Histogram of the total number\nof steps taken each day\n(missing values replaced with mean for that 5-minute interval)")
+
+    meanStepsPerDayWithMissingData = mean(activityStepsByDateWithMissingData$TotalSteps, na.rm = TRUE)
+    medianStepsPerDayWithMissingData = median(activityStepsByDateWithMissingData$TotalSteps, na.rm = TRUE)
+
+    totalNumberOfSteps = sum(activity$steps, na.rm = TRUE)
+    totalNumberOfStepsWithMissingData = sum(activityPlusMissingData$steps, na.rm = TRUE)
+
+    if ((meanStepsPerDayWithMissingData == meanStepsPerDay) &
+        (medianStepsPerDayWithMissingData == medianStepsPerDay))    
+    {
+       print.noquote("The mean and median number of steps do NOT differ when missing values are replaced")
+    } else 
+    {
+        print.noquote("The mean and median number of steps DO differ when missing values are replaced")
+    }
+
+    if (totalNumberOfStepsWithMissingData == totalNumberOfSteps)   
+    {
+       print.noquote("The total number of steps do NOT differ when missing values are replaced")
+    } else 
+    {
+        print.noquote("The total number of steps DO differ when missing values are replaced")
+    }
+```
+
+Are there differences in activity patterns between weekdays and weekends?
+
+Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r}    
+    weekendActivity = grepl("(Sun|Sat)", weekdays(activity$date, abbreviate=TRUE))
+    activity$IsWeekend <- factor(weekendActivity, levels=c(TRUE, FALSE), labels=c("Weekend", "Weekday"))
+
+```
+
+Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r}
+    weekendActivity = grepl("(Sun|Sat)", weekdays(activityPlusMissingData$date, abbreviate=TRUE))
+    activityPlusMissingData$IsWeekend <- factor(weekendActivity, levels=c(TRUE, FALSE), labels=c("Weekend", "Weekday"))
+    
+    table3 = data.table(activityPlusMissingData)
+    weekendActivitybyTime <- table3[, median(steps), by=c("interval","IsWeekend")]
+    
+    setnames(weekendActivitybyTime, c("interval", "IsWeekend", "V1"), c("Interval", "IsWeekend", "AvgSteps"))    
+    
+    library(lattice)
+    xyplot(weekendActivitybyTime$AvgSteps ~ weekendActivitybyTime$Interval | weekendActivitybyTime$IsWeekend, 
+           xlab="Number of steps",
+           main="Activity patterns between weekdays and weekends",
+           ylab="Interval",
+           type="l",
+           layout=c(1,2))
+
+```
